@@ -34,15 +34,6 @@ type SQS struct {
 
 func NewSQSWorker(conf *SQSConf, svc *sqs.SQS) (*SQS, error) {
 
-	/*sess, err := session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	})
-	if err != nil {
-		return nil, err
-	}
-	svc := sqs.New(sess)*/
-
-
 	if conf.Queue == "" {
 		return nil, errors.New("queue not set")
 	}
@@ -121,7 +112,7 @@ func (s *SQS) handleMessages(ctx context.Context, consumeFn ConsumerFn) error {
 
 			for _, msg := range result.Messages {
 				if err := consumeFn([]byte(*msg.Body)); err != nil {
-					logrus.Warnf("error %s", err.Error())
+					logrus.Errorf("error %s", err.Error())
 					continue
 				}
 				toDelete = append(toDelete, msg)

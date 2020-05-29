@@ -126,7 +126,6 @@ func TestNewSQSWorker(t *testing.T) {
 	}
 }
 
-
 func TestSQS_handleMessages(t *testing.T) {
 
 	svc := sqs.New(LOCALSTACK.CreateAWSSession())
@@ -136,7 +135,7 @@ func TestSQS_handleMessages(t *testing.T) {
 		t.Errorf("error during stack creation %v", err)
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 2 * time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
 
 	var actual []string
 
@@ -171,30 +170,80 @@ func TestSQS_handleMessages(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "shouldHandleMessageWithError",
+			fields: fields{
+				config: &SQSConf{
+					Queue:             *queueUrl,
+					VisibilityTimeout: 0,
+				},
+				sqs: svc,
+			},
+			args: args{
+				ctx: ctx,
+				consumeFn: func(data []byte) error {
+					return fmt.Errorf("error consume for message %s", string(data))
+				},
+			},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
+
+		actual = make([]string, 0)
+
+		err := fillQueue(svc, aws.String(tt.fields.config.Queue), err)
+		if err != nil {
+			t.Errorf("error during queue message insertion %v", err)
+		}
+
 		t.Run(tt.name, func(t *testing.T) {
+
 			s, _ := NewSQSWorker(tt.fields.config, tt.fields.sqs)
-			if err := s.handleMessages(tt.args.ctx, tt.args.consumeFn); (err != nil) != tt.wantErr {
+
+			if err := s.handleMessages(tt.args.ctx, tt.args.consumeFn); err != nil {
 				t.Errorf("handleMessages() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			message, err := tt.fields.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
-				QueueUrl: aws.String(tt.fields.config.Queue),
-			})
 
-			assert.NotNil(t, message)
-			assert.Equal(t, len(message.Messages), 0)
 
-			for _,msg := range actual {
-				assert.Contains(t, []string{
-					"msg1",
-					"msg2",
-					"msg3",
-				}, msg)
-			}
+			if !tt.wantErr {
 
-			if err != nil {
-				t.Errorf("error during ReceiveMessage %v", err)
+
+				message, err := tt.fields.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
+					QueueUrl:            aws.String(tt.fields.config.Queue),
+					MaxNumberOfMessages: aws.Int64(3),
+				})
+
+				if err != nil {
+					t.Errorf("error during ReceiveMessage %v", err)
+				}
+
+				assert.NotNil(t, message)
+				assert.Equal(t, len(message.Messages), 0)
+
+				for _, msg := range actual {
+					assert.Contains(t, []string{
+						"msg1",
+						"msg2",
+						"msg3",
+					}, msg)
+				}
+
+			} else {
+
+				message, err := tt.fields.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
+					MaxNumberOfMessages: aws.Int64(3),
+					QueueUrl:            aws.String(tt.fields.config.Queue),
+				})
+
+				if err != nil {
+					t.Errorf("error during ReceiveMessage %v", err)
+				}
+
+				assert.NotNil(t, message)
+				assert.Equal(t, len(message.Messages), 3)
+				assert.Equal(t, len(actual), 0)
+
 			}
 
 		})
@@ -212,6 +261,10 @@ func initStack(svc *sqs.SQS) (*string, error) {
 		return nil, err
 	}
 
+	return queue.QueueUrl, nil
+}
+
+func fillQueue(svc *sqs.SQS, queue *string, err error) error {
 	batch := &sqs.SendMessageBatchInput{
 		Entries: []*sqs.SendMessageBatchRequestEntry{
 			{
@@ -227,18 +280,17 @@ func initStack(svc *sqs.SQS) (*string, error) {
 				MessageBody: aws.String("msg3"),
 			},
 		},
-		QueueUrl: queue.QueueUrl,
+		QueueUrl: queue,
 	}
 
 	messageBatch, err := svc.SendMessageBatch(batch)
 
 	if messageBatch != nil && len(messageBatch.Failed) > 0 {
-		return nil, err
+		return err
 	}
 
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	return queue.QueueUrl, nil
+	return nil
 }
