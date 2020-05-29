@@ -1,4 +1,4 @@
-# SQS-CONSUMER
+# Sqs-Consumer
 
 [![license](https://img.shields.io/github/license/The-Data-Appeal-Company/spring-off.svg)](LICENSE.txt)
 ![Go](https://github.com/The-Data-Appeal-Company/sqs-consumer/workflows/Go/badge.svg?branch=master)
