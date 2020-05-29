@@ -1,4 +1,4 @@
-package sqs_consumer
+package consumer
 
 import "context"
 
