@@ -205,9 +205,7 @@ func TestSQS_handleMessages(t *testing.T) {
 				t.Errorf("handleMessages() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-
 			if !tt.wantErr {
-
 
 				message, err := tt.fields.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
 					QueueUrl:            aws.String(tt.fields.config.Queue),

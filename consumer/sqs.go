@@ -147,4 +147,3 @@ func (s *SQS) deleteSqsMessages(msg []*sqs.Message) error {
 
 	return err
 }
-
