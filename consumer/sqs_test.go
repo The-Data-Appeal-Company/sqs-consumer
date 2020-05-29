@@ -76,7 +76,7 @@ func TestNewSQSWorker(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "shouldCreateNewSQSWorker",
+			name: "shouldCreateNewSQSConsumer",
 			args: args{
 				conf: sqsConf,
 				svc:  svc,
@@ -90,7 +90,7 @@ func TestNewSQSWorker(t *testing.T) {
 		},
 
 		{
-			name: "shouldCreateNewSQSWorkerWithDefaultValues",
+			name: "shouldCreateNewSQSConsumerWithDefaultValues",
 			args: args{
 				conf: &SQSConf{
 					Queue: "queue",
@@ -114,13 +114,13 @@ func TestNewSQSWorker(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewSQSWorker(tt.args.conf, tt.args.svc)
+			got, err := NewSQSConsumer(tt.args.conf, tt.args.svc)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("NewSQSWorker() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("NewSQSConsumer() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewSQSWorker() got = %v, want %v", got, tt.want)
+				t.Errorf("NewSQSConsumer() got = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -199,7 +199,7 @@ func TestSQS_handleMessages(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 
-			s, _ := NewSQSWorker(tt.fields.config, tt.fields.sqs)
+			s, _ := NewSQSConsumer(tt.fields.config, tt.fields.sqs)
 
 			if err := s.handleMessages(tt.args.ctx, tt.args.consumeFn); err != nil {
 				t.Errorf("handleMessages() error = %v, wantErr %v", err, tt.wantErr)

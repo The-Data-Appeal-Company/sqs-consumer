@@ -32,7 +32,7 @@ type SQS struct {
 	sqs    *sqs.SQS
 }
 
-func NewSQSWorker(conf *SQSConf, svc *sqs.SQS) (*SQS, error) {
+func NewSQSConsumer(conf *SQSConf, svc *sqs.SQS) (*SQS, error) {
 
 	if conf.Queue == "" {
 		return nil, errors.New("queue not set")
