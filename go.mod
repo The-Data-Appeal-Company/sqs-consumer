@@ -1,4 +1,4 @@
-module sqs-consumer
+module github.com/The-Data-Appeal-Company/sqs-consumer
 
 go 1.14
 
