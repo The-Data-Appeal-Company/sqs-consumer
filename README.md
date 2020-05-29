@@ -9,7 +9,7 @@ Sqs-consumer allows developers to consume messages from a sqs queue leveraging g
 
 ### Usage
 
-Sqs-consumer provides a simple configuration  *consumer.SQSConf* used by consumer and contains: the queue url, the consumer concurrency and the max number of messages that aws client can receive per request. 
+Sqs-consumer provides a simple configuration `consumer.SQSConf` used by consumer and contains: the queue url, the consumer concurrency and the max number of messages that aws client can receive per request. 
 
 ```go
  confSQS := consumer.SQSConf{
@@ -21,7 +21,7 @@ Sqs-consumer provides a simple configuration  *consumer.SQSConf* used by consume
 
 Further information about request limits can be retrieved in AWS official documentation: https://docs.aws.amazon.com/sdk-for-go/api/service/sqs/#ReceiveMessageInput
 
-To consume messages from the queue with sqs-consumer you must provide a *consumer.ConsumerFn* that process your message and return, in case of fail an error. If *consumerFn* process a message without errors sqs-consumer will delete the message in the queue, otherwise message continue to live in the queue scope according to the queue definition. 
+To consume messages from the queue with sqs-consumer you must provide a *consumer.ConsumerFn* that process your message and return, in case of fail, an error. If *consumerFn* process a message without errors sqs-consumer will delete the message in the queue, otherwise message continue to live in the queue scope according to the queue definition. 
 ```go
  
 cons, err := consumer.NewSQSConsumer(&confSQS, sqs.New(sess))
