@@ -127,6 +127,32 @@ func (s *SQS) StartBatched(ctx context.Context, batcher *batcher.Batcher, consum
 		cancel()
 	}()
 
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				result, err := s.sqs.ReceiveMessage(s.pullMessagesRequest())
+
+				if err != nil {
+					panic(err)
+				}
+
+				if len(result.Messages) == 0 {
+					time.Sleep(1 * time.Second)
+					continue
+				}
+
+				for _, msg := range result.Messages {
+					batcher.Accumulate(msg)
+				}
+
+			}
+		}
+
+	}()
+
 	return batcher.Start(ctx, func(batch []interface{}) error {
 		msgBatch := make([]*sqs.Message, len(batch))
 		dataBatch := make([][]byte, len(batch))
