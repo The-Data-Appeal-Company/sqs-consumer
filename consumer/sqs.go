@@ -159,7 +159,7 @@ func (s *SQS) StartBatched(ctx context.Context, batcher *batcher.Batcher, consum
 
 		for i := range batch {
 			msgBatch[i] = batch[i].(*sqs.Message)
-			dataBatch[i] = []byte(*batch[i].(sqs.Message).Body)
+			dataBatch[i] = []byte(*batch[i].(*sqs.Message).Body)
 		}
 
 		err := consumeFn(dataBatch)
