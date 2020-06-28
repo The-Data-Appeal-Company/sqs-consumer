@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"errors"
+	"github.com/The-Data-Appeal-Company/batcher-go"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/sirupsen/logrus"
@@ -25,12 +26,15 @@ type SQSConf struct {
 	MaxNumberOfMessages int64
 	VisibilityTimeout   int64
 	WaitTimeSeconds     int64
+	DeletionPolicy      DeletionPolicy
 }
 
 type SQS struct {
 	config *SQSConf
 	sqs    *sqs.SQS
 }
+
+type DeletionPolicy string
 
 func NewSQSConsumer(conf *SQSConf, svc *sqs.SQS) (*SQS, error) {
 
@@ -79,25 +83,12 @@ func (s *SQS) Start(ctx context.Context, consumeFn ConsumerFn) error {
 }
 
 func (s *SQS) handleMessages(ctx context.Context, consumeFn ConsumerFn) error {
-	receiveMessageRequest := &sqs.ReceiveMessageInput{
-		AttributeNames: []*string{
-			aws.String(sqs.MessageSystemAttributeNameSentTimestamp),
-		},
-		MessageAttributeNames: []*string{
-			aws.String(sqs.QueueAttributeNameAll),
-		},
-		QueueUrl:            &s.config.Queue,
-		MaxNumberOfMessages: aws.Int64(s.config.MaxNumberOfMessages),
-		VisibilityTimeout:   aws.Int64(s.config.VisibilityTimeout),
-		WaitTimeSeconds:     aws.Int64(s.config.WaitTimeSeconds),
-	}
-
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		default:
-			result, err := s.sqs.ReceiveMessage(receiveMessageRequest)
+			result, err := s.sqs.ReceiveMessage(s.pullMessagesRequest())
 
 			if err != nil {
 				return err
@@ -121,7 +112,81 @@ func (s *SQS) handleMessages(ctx context.Context, consumeFn ConsumerFn) error {
 			if err := s.deleteSqsMessages(toDelete); err != nil {
 				return err
 			}
+
 		}
+	}
+}
+
+func (s *SQS) StartBatched(ctx context.Context, batcher *batcher.Batcher, consumeFn ConsumerBatchFn) error {
+	ctx, cancel := context.WithCancel(ctx)
+
+	go func() {
+		c := make(chan os.Signal)
+		signal.Notify(c, os.Interrupt)
+		_ = <-c
+		cancel()
+	}()
+
+	return batcher.Start(ctx, func(batch []interface{}) error {
+		msgBatch := make([]*sqs.Message, len(batch))
+		dataBatch := make([][]byte, len(batch))
+
+		for i := range batch {
+			msgBatch[i] = batch[i].(*sqs.Message)
+			dataBatch[i] = []byte(*batch[i].(sqs.Message).Body)
+		}
+
+		err := consumeFn(dataBatch)
+		if err != nil {
+			logrus.Error("error processing batch: ", err)
+			return nil
+		}
+
+		err = s.deleteSqsMessages(msgBatch)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+func (s *SQS) handleMessagesBatched(ctx context.Context, batch *batcher.Batcher) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+			result, err := s.sqs.ReceiveMessage(s.pullMessagesRequest())
+
+			if err != nil {
+				return err
+			}
+
+			if len(result.Messages) == 0 {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			for _, msg := range result.Messages {
+				batch.Accumulate(msg)
+			}
+
+		}
+	}
+}
+func (s *SQS) pullMessagesRequest() *sqs.ReceiveMessageInput {
+	return &sqs.ReceiveMessageInput{
+		AttributeNames: []*string{
+			aws.String(sqs.MessageSystemAttributeNameSentTimestamp),
+		},
+		MessageAttributeNames: []*string{
+			aws.String(sqs.QueueAttributeNameAll),
+		},
+		QueueUrl:            &s.config.Queue,
+		MaxNumberOfMessages: aws.Int64(s.config.MaxNumberOfMessages),
+		VisibilityTimeout:   aws.Int64(s.config.VisibilityTimeout),
+		WaitTimeSeconds:     aws.Int64(s.config.WaitTimeSeconds),
 	}
 }
 
