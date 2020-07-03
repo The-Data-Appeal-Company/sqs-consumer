@@ -222,19 +222,43 @@ func (s *SQS) deleteSqsMessages(msg []*sqs.Message) error {
 		return nil
 	}
 
-	batch := make([]*sqs.DeleteMessageBatchRequestEntry, len(msg))
+	chunks := chunk(msg, 10) //max batch size for sqs is 10
 
-	for i, v := range msg {
-		batch[i] = &sqs.DeleteMessageBatchRequestEntry{
-			Id:            v.MessageId,
-			ReceiptHandle: v.ReceiptHandle,
+	for _, chunk := range chunks {
+		batch := make([]*sqs.DeleteMessageBatchRequestEntry, len(chunk))
+
+		for i, v := range chunk {
+			batch[i] = &sqs.DeleteMessageBatchRequestEntry{
+				Id:            v.MessageId,
+				ReceiptHandle: v.ReceiptHandle,
+			}
+		}
+
+		_, err := s.sqs.DeleteMessageBatch(&sqs.DeleteMessageBatchInput{
+			Entries:  batch,
+			QueueUrl: &s.config.Queue,
+		})
+
+		if err != nil {
+			return err
 		}
 	}
 
-	_, err := s.sqs.DeleteMessageBatch(&sqs.DeleteMessageBatchInput{
-		Entries:  batch,
-		QueueUrl: &s.config.Queue,
-	})
+	return nil
+}
 
-	return err
+func chunk(rows []*sqs.Message, chunkSize int) [][]*sqs.Message {
+	var chunk []*sqs.Message
+	chunks := make([][]*sqs.Message, 0, len(rows)/chunkSize+1)
+
+	for len(rows) >= chunkSize {
+		chunk, rows = rows[:chunkSize], rows[chunkSize:]
+		chunks = append(chunks, chunk)
+	}
+
+	if len(rows) > 0 {
+		chunks = append(chunks, rows[:len(rows)])
+	}
+
+	return chunks
 }
