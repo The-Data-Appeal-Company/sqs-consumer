@@ -47,7 +47,7 @@ if err != nil {
 #### Batched consumer 
 
 
-```
+```go
 
 cons, err := consumer.NewSQSConsumer(&confSQS, sqs.New(sess))
 
