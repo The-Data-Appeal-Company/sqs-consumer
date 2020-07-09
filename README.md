@@ -56,9 +56,9 @@ if err != nil {
 }
 
 cons.StartBatched(ctx, s.batcher, func(data [][]byte) error {
-		 // Process 
+   // Process 
    return nil 
-	})
+})
  ```
 
 
