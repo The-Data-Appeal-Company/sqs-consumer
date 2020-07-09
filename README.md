@@ -44,5 +44,22 @@ if err != nil {
 }
 ``` 
 
+#### Batched consumer 
+
+
+```
+
+cons, err := consumer.NewSQSConsumer(&confSQS, sqs.New(sess))
+
+if err != nil {
+    panic(err)
+}
+
+cons.StartBatched(ctx, s.batcher, func(data [][]byte) error {
+		 // Process 
+   return nil 
+	})
+ ```
+
 
   
