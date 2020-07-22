@@ -2,7 +2,7 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/The-Data-Appeal-Company/sqs-consumer)](https://goreportcard.com/report/github.com/The-Data-Appeal-Company/sqs-consumer)
 ![Go](https://github.com/The-Data-Appeal-Company/sqs-consumer/workflows/Go/badge.svg?branch=master)
-[![license](https://img.shields.io/github/license/The-Data-Appeal-Company/spring-off.svg)](LICENSE)
+[![license](https://img.shields.io/github/license/The-Data-Appeal-Company/sqs-consumer.svg)](LICENSE)
 
 ### Simple and concurrently consuming utility for AWS SQS
 Sqs-consumer allows developers to consume messages from a sqs queue leveraging go's competition management. Use Sqs consumer is very simple, fast and clean.
