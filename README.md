@@ -8,6 +8,9 @@
 Sqs-consumer allows developers to consume messages from a sqs queue leveraging go's competition management. Use Sqs consumer is very simple, fast and clean.
 
 ### Usage
+```go
+import "github.com/The-Data-Appeal-Company/sqs-consumer/consumer"
+```
 
 Sqs-consumer provides a simple configuration `consumer.SQSConf` used by consumer and contains: the queue url, the consumer concurrency and the max number of messages that aws client can receive per request. 
 
