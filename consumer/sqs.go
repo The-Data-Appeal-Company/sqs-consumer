@@ -15,7 +15,7 @@ import (
 
 const (
 	DefaultMaxNumberOfMessages = 10
-	DefaultVisibilityTimeout   = 20
+	QueueVisibilityTimeout     = -1
 	DefaultWaitTimeSeconds     = 5
 	DefaultConcurrency         = 1
 )
@@ -51,7 +51,7 @@ func NewSQSConsumer(conf *SQSConf, svc *sqs.SQS) (*SQS, error) {
 	}
 
 	if conf.VisibilityTimeout == 0 {
-		conf.VisibilityTimeout = DefaultVisibilityTimeout
+		conf.VisibilityTimeout = QueueVisibilityTimeout
 	}
 
 	if conf.MaxNumberOfMessages == 0 {
@@ -201,6 +201,7 @@ func (s *SQS) handleMessagesBatched(ctx context.Context, batch *batcher.Batcher)
 		}
 	}
 }
+
 func (s *SQS) pullMessagesRequest() *sqs.ReceiveMessageInput {
 	return &sqs.ReceiveMessageInput{
 		AttributeNames: []*string{
@@ -211,9 +212,19 @@ func (s *SQS) pullMessagesRequest() *sqs.ReceiveMessageInput {
 		},
 		QueueUrl:            &s.config.Queue,
 		MaxNumberOfMessages: aws.Int64(s.config.MaxNumberOfMessages),
-		VisibilityTimeout:   aws.Int64(s.config.VisibilityTimeout),
+		VisibilityTimeout:   s.getVisibilityTimeout(),
 		WaitTimeSeconds:     aws.Int64(s.config.WaitTimeSeconds),
 	}
+}
+
+func (s *SQS) getVisibilityTimeout() *int64 {
+	visibilityTimeout := aws.Int64(s.config.VisibilityTimeout)
+
+	if s.config.VisibilityTimeout == QueueVisibilityTimeout {
+		visibilityTimeout = nil
+	}
+
+	return visibilityTimeout
 }
 
 func (s *SQS) deleteSqsMessages(msg []*sqs.Message) error {

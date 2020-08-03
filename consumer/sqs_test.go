@@ -102,7 +102,7 @@ func TestNewSQSWorker(t *testing.T) {
 					Queue:               "queue",
 					Concurrency:         DefaultConcurrency,
 					MaxNumberOfMessages: DefaultMaxNumberOfMessages,
-					VisibilityTimeout:   DefaultVisibilityTimeout,
+					VisibilityTimeout:   QueueVisibilityTimeout,
 					WaitTimeSeconds:     DefaultWaitTimeSeconds,
 				},
 				sqs: svc,
