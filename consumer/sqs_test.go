@@ -102,7 +102,6 @@ func TestNewSQSWorker(t *testing.T) {
 					Queue:               "queue",
 					Concurrency:         DefaultConcurrency,
 					MaxNumberOfMessages: DefaultMaxNumberOfMessages,
-					VisibilityTimeout:   QueueVisibilityTimeout,
 					WaitTimeSeconds:     DefaultWaitTimeSeconds,
 				},
 				sqs: svc,
@@ -291,4 +290,47 @@ func fillQueue(svc *sqs.SQS, queue *string, err error) error {
 		return err
 	}
 	return nil
+}
+
+func TestSQS_getVisibilityTimeout(t *testing.T) {
+	type fields struct {
+		config *SQSConf
+		sqs    *sqs.SQS
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   *int64
+	}{
+		{
+			name: "shouldGetVisibilityTimeoutFromConfig",
+			fields: fields{
+				config: &SQSConf{
+					Queue:             "queue-test",
+					VisibilityTimeout: 10,
+				},
+			},
+			want: aws.Int64(10),
+		},
+		{
+			name: "shouldGetNilVisibilityTimeoutWhenNoConfigSpecified",
+			fields: fields{
+				config: &SQSConf{
+					Queue: "queue-test",
+				},
+			},
+			want: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &SQS{
+				config: tt.fields.config,
+				sqs:    tt.fields.sqs,
+			}
+			if got := s.getVisibilityTimeout(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getVisibilityTimeout() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

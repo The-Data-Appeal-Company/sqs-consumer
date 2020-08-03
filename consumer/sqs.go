@@ -15,7 +15,6 @@ import (
 
 const (
 	DefaultMaxNumberOfMessages = 10
-	QueueVisibilityTimeout     = -1
 	DefaultWaitTimeSeconds     = 5
 	DefaultConcurrency         = 1
 )
@@ -48,10 +47,6 @@ func NewSQSConsumer(conf *SQSConf, svc *sqs.SQS) (*SQS, error) {
 
 	if conf.WaitTimeSeconds == 0 {
 		conf.WaitTimeSeconds = DefaultWaitTimeSeconds
-	}
-
-	if conf.VisibilityTimeout == 0 {
-		conf.VisibilityTimeout = QueueVisibilityTimeout
 	}
 
 	if conf.MaxNumberOfMessages == 0 {
@@ -220,7 +215,7 @@ func (s *SQS) pullMessagesRequest() *sqs.ReceiveMessageInput {
 func (s *SQS) getVisibilityTimeout() *int64 {
 	visibilityTimeout := aws.Int64(s.config.VisibilityTimeout)
 
-	if s.config.VisibilityTimeout == QueueVisibilityTimeout {
+	if s.config.VisibilityTimeout == 0 {
 		visibilityTimeout = nil
 	}
 
