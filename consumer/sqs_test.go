@@ -8,46 +8,42 @@ import (
 	"github.com/aws/aws-sdk-go/aws/client/metadata"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/mitchelldavis/go_localstack/pkg/localstack"
+	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 	"github.com/stretchr/testify/assert"
-	"log"
-	"os"
-	"reflect"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 )
 
-var LOCALSTACK *localstack.Localstack
-
-func TestMain(t *testing.M) {
-	os.Exit(InitializeLocalstack(t))
+type SqsMock struct {
+	sqsiface.SQSAPI
+	inputs       []*sqs.ReceiveMessageInput
+	receiveError error
+	deleteInputs []*sqs.DeleteMessageBatchInput
+	deleteError  error
 }
 
-func InitializeLocalstack(t *testing.M) int {
-	sqs, _ := localstack.NewLocalstackService("sqs")
+func NewSqsMock(receiveError error, deleteError error) *SqsMock {
+	return &SqsMock{inputs: make([]*sqs.ReceiveMessageInput, 0), receiveError: receiveError, deleteInputs: make([]*sqs.DeleteMessageBatchInput, 0), deleteError: deleteError}
+}
 
-	// Gather them all up...
-	LOCALSTACK_SERVICES := &localstack.LocalstackServiceCollection{
-		*sqs,
+func (s *SqsMock) ReceiveMessage(input *sqs.ReceiveMessageInput) (*sqs.ReceiveMessageOutput, error) {
+	if s.receiveError != nil {
+		return nil, s.receiveError
 	}
+	s.inputs = append(s.inputs, input)
+	return getQueueContent(), nil
+}
 
-	// Initialize the services
-	var err error
-
-	LOCALSTACK, err = localstack.NewLocalstack(LOCALSTACK_SERVICES)
-	if err != nil {
-		log.Fatal(fmt.Sprintf("Unable to create the localstack instance: %s", err))
+func (s *SqsMock) DeleteMessageBatch(input *sqs.DeleteMessageBatchInput) (*sqs.DeleteMessageBatchOutput, error) {
+	if s.deleteError != nil {
+		return nil, s.deleteError
 	}
-	if LOCALSTACK == nil {
-		log.Fatal("LOCALSTACK was nil.")
-	}
-	defer LOCALSTACK.Destroy()
-
-	return t.Run()
+	s.deleteInputs = append(s.deleteInputs, input)
+	return nil, nil
 }
 
 func TestNewSQSWorker(t *testing.T) {
-
 	sqsConf := &SQSConf{
 		Queue:               "queue",
 		Concurrency:         2,
@@ -67,7 +63,7 @@ func TestNewSQSWorker(t *testing.T) {
 
 	type args struct {
 		conf *SQSConf
-		svc  *sqs.SQS
+		svc  sqsiface.SQSAPI
 	}
 	tests := []struct {
 		name    string
@@ -88,7 +84,6 @@ func TestNewSQSWorker(t *testing.T) {
 
 			wantErr: false,
 		},
-
 		{
 			name: "shouldCreateNewSQSConsumerWithDefaultValues",
 			args: args{
@@ -118,29 +113,21 @@ func TestNewSQSWorker(t *testing.T) {
 				t.Errorf("NewSQSConsumer() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewSQSConsumer() got = %v, want %v", got, tt.want)
-			}
+			require.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestSQS_handleMessages(t *testing.T) {
+	queueUrl := "queue"
 
-	svc := sqs.New(LOCALSTACK.CreateAWSSession())
-	queueUrl, err := initStack(svc)
-
-	if err != nil {
-		t.Errorf("error during stack creation %v", err)
-	}
-
-	ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
 
 	var actual []string
 
 	type fields struct {
 		config *SQSConf
-		sqs    *sqs.SQS
+		sqs    sqsiface.SQSAPI
 	}
 	type args struct {
 		ctx       context.Context
@@ -156,9 +143,9 @@ func TestSQS_handleMessages(t *testing.T) {
 			name: "shouldHandleMessage",
 			fields: fields{
 				config: &SQSConf{
-					Queue: *queueUrl,
+					Queue: queueUrl,
 				},
-				sqs: svc,
+				sqs: NewSqsMock(nil, nil),
 			},
 			args: args{
 				ctx: ctx,
@@ -173,10 +160,10 @@ func TestSQS_handleMessages(t *testing.T) {
 			name: "shouldHandleMessageWithError",
 			fields: fields{
 				config: &SQSConf{
-					Queue:             *queueUrl,
+					Queue:             queueUrl,
 					VisibilityTimeout: 0,
 				},
-				sqs: svc,
+				sqs: NewSqsMock(nil, nil),
 			},
 			args: args{
 				ctx: ctx,
@@ -188,36 +175,17 @@ func TestSQS_handleMessages(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-
 		actual = make([]string, 0)
-
-		err := fillQueue(svc, aws.String(tt.fields.config.Queue), err)
-		if err != nil {
-			t.Errorf("error during queue message insertion %v", err)
-		}
-
 		t.Run(tt.name, func(t *testing.T) {
-
 			s, _ := NewSQSConsumer(tt.fields.config, tt.fields.sqs)
-
 			if err := s.handleMessages(tt.args.ctx, tt.args.consumeFn); err != nil {
 				t.Errorf("handleMessages() error = %v, wantErr %v", err, tt.wantErr)
+				return
 			}
-
+			mock := tt.fields.sqs.(*SqsMock)
 			if !tt.wantErr {
-
-				message, err := tt.fields.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
-					QueueUrl:            aws.String(tt.fields.config.Queue),
-					MaxNumberOfMessages: aws.Int64(3),
-				})
-
-				if err != nil {
-					t.Errorf("error during ReceiveMessage %v", err)
-				}
-
-				assert.NotNil(t, message)
-				assert.Equal(t, len(message.Messages), 0)
-
+				require.NotNil(t, mock.inputs)
+				require.NotNil(t, mock.deleteInputs)
 				for _, msg := range actual {
 					assert.Contains(t, []string{
 						"msg1",
@@ -225,77 +193,18 @@ func TestSQS_handleMessages(t *testing.T) {
 						"msg3",
 					}, msg)
 				}
-
 			} else {
-
-				message, err := tt.fields.sqs.ReceiveMessage(&sqs.ReceiveMessageInput{
-					MaxNumberOfMessages: aws.Int64(3),
-					QueueUrl:            aws.String(tt.fields.config.Queue),
-				})
-
-				if err != nil {
-					t.Errorf("error during ReceiveMessage %v", err)
-				}
-
-				assert.NotNil(t, message)
-				assert.Equal(t, len(message.Messages), 3)
-				assert.Equal(t, len(actual), 0)
-
+				require.Len(t, mock.deleteInputs, 0)
+				require.Len(t, actual, 0)
 			}
-
 		})
-
 	}
-}
-
-func initStack(svc *sqs.SQS) (*string, error) {
-
-	queue, err := svc.CreateQueue(&sqs.CreateQueueInput{
-		QueueName: aws.String("queue"),
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return queue.QueueUrl, nil
-}
-
-func fillQueue(svc *sqs.SQS, queue *string, err error) error {
-	batch := &sqs.SendMessageBatchInput{
-		Entries: []*sqs.SendMessageBatchRequestEntry{
-			{
-				Id:          aws.String("msg1"),
-				MessageBody: aws.String("msg1"),
-			},
-			{
-				Id:          aws.String("msg2"),
-				MessageBody: aws.String("msg2"),
-			},
-			{
-				Id:          aws.String("msg3"),
-				MessageBody: aws.String("msg3"),
-			},
-		},
-		QueueUrl: queue,
-	}
-
-	messageBatch, err := svc.SendMessageBatch(batch)
-
-	if messageBatch != nil && len(messageBatch.Failed) > 0 {
-		return err
-	}
-
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func TestSQS_getVisibilityTimeout(t *testing.T) {
 	type fields struct {
 		config *SQSConf
-		sqs    *sqs.SQS
+		sqs    sqsiface.SQSAPI
 	}
 	tests := []struct {
 		name   string
@@ -328,9 +237,86 @@ func TestSQS_getVisibilityTimeout(t *testing.T) {
 				config: tt.fields.config,
 				sqs:    tt.fields.sqs,
 			}
-			if got := s.getVisibilityTimeout(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getVisibilityTimeout() = %v, want %v", got, tt.want)
-			}
+			got := s.getVisibilityTimeout()
+			require.Equal(t, tt.want, got)
 		})
+	}
+}
+
+func TestSQS_handleMessagesWhenSqsError(t *testing.T) {
+	ctx := context.Background()
+	type fields struct {
+		config *SQSConf
+		sqs    sqsiface.SQSAPI
+	}
+	type args struct {
+		ctx       context.Context
+		consumeFn ConsumerFn
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+	}{
+		{
+			name: "should error when receive error",
+			fields: fields{
+				config: &SQSConf{
+					Queue:             "queue",
+					VisibilityTimeout: 0,
+				},
+				sqs: NewSqsMock(fmt.Errorf("error"), nil),
+			},
+			args: args{
+				ctx: ctx,
+				consumeFn: func(data []byte) error {
+					return nil
+				},
+			},
+		},
+		{
+			name: "should error when delete error",
+			fields: fields{
+				config: &SQSConf{
+					Queue:             "queue",
+					VisibilityTimeout: 0,
+				},
+				sqs: NewSqsMock(nil, fmt.Errorf("error")),
+			},
+			args: args{
+				ctx: ctx,
+				consumeFn: func(data []byte) error {
+					return nil
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &SQS{
+				config: tt.fields.config,
+				sqs:    tt.fields.sqs,
+			}
+			require.Error(t, s.handleMessages(tt.args.ctx, tt.args.consumeFn))
+		})
+	}
+}
+
+func getQueueContent() *sqs.ReceiveMessageOutput {
+	return &sqs.ReceiveMessageOutput{
+		Messages: []*sqs.Message{
+			{
+				MessageId: aws.String("msg1"),
+				Body:      aws.String("msg1"),
+			},
+			{
+				MessageId: aws.String("msg2"),
+				Body:      aws.String("msg2"),
+			},
+			{
+				MessageId: aws.String("msg3"),
+				Body:      aws.String("msg3"),
+			},
+		},
 	}
 }

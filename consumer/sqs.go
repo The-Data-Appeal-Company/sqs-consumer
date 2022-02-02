@@ -6,6 +6,7 @@ import (
 	"github.com/The-Data-Appeal-Company/batcher-go"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"os"
@@ -30,12 +31,12 @@ type SQSConf struct {
 
 type SQS struct {
 	config *SQSConf
-	sqs    *sqs.SQS
+	sqs    sqsiface.SQSAPI
 }
 
 type DeletionPolicy string
 
-func NewSQSConsumer(conf *SQSConf, svc *sqs.SQS) (*SQS, error) {
+func NewSQSConsumer(conf *SQSConf, svc sqsiface.SQSAPI) (*SQS, error) {
 
 	if conf.Queue == "" {
 		return nil, errors.New("queue not set")
