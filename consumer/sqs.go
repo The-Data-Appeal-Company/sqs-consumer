@@ -14,10 +14,18 @@ import (
 	"time"
 )
 
-const (
-	DefaultMaxNumberOfMessages = 10
-	DefaultWaitTimeSeconds     = 5
+var (
+	DefaultMaxNumberOfMessages = int64(10)
+	DefaultWaitTimeSeconds     = int64(5)
 	DefaultConcurrency         = 1
+	DefaultDeleteStrategy      = DeleteStrategyOnSuccess
+)
+
+type DeleteStrategy string
+
+var (
+	DeleteStrategyImmediate = DeleteStrategy("IMMEDIATE")
+	DeleteStrategyOnSuccess = DeleteStrategy("ON_SUCCESS")
 )
 
 type SQSConf struct {
@@ -26,15 +34,13 @@ type SQSConf struct {
 	MaxNumberOfMessages int64
 	VisibilityTimeout   int64
 	WaitTimeSeconds     int64
-	DeletionPolicy      DeletionPolicy
+	DeleteStrategy      DeleteStrategy
 }
 
 type SQS struct {
 	config *SQSConf
 	sqs    sqsiface.SQSAPI
 }
-
-type DeletionPolicy string
 
 func NewSQSConsumer(conf *SQSConf, svc sqsiface.SQSAPI) (*SQS, error) {
 
@@ -52,6 +58,10 @@ func NewSQSConsumer(conf *SQSConf, svc sqsiface.SQSAPI) (*SQS, error) {
 
 	if conf.MaxNumberOfMessages == 0 {
 		conf.MaxNumberOfMessages = DefaultMaxNumberOfMessages
+	}
+
+	if len(conf.DeleteStrategy) == 0 {
+		conf.DeleteStrategy = DefaultDeleteStrategy
 	}
 
 	return &SQS{config: conf, sqs: svc}, nil
@@ -95,14 +105,22 @@ func (s *SQS) handleMessages(ctx context.Context, consumeFn ConsumerFn) error {
 				continue
 			}
 
-			toDelete := make([]*sqs.Message, 0)
+			if s.config.DeleteStrategy == DeleteStrategyImmediate {
+				if err := s.deleteSqsMessages(result.Messages); err != nil {
+					return err
+				}
+			}
 
+			toDelete := make([]*sqs.Message, 0)
 			for _, msg := range result.Messages {
 				if err := consumeFn([]byte(*msg.Body)); err != nil {
 					logrus.Errorf("error %s", err.Error())
 					continue
 				}
-				toDelete = append(toDelete, msg)
+
+				if s.config.DeleteStrategy == DeleteStrategyOnSuccess {
+					toDelete = append(toDelete, msg)
+				}
 			}
 
 			if err := s.deleteSqsMessages(toDelete); err != nil {
@@ -158,15 +176,22 @@ func (s *SQS) StartBatched(ctx context.Context, batcher *batcher.Batcher, consum
 			dataBatch[i] = []byte(*batch[i].(*sqs.Message).Body)
 		}
 
+		if s.config.DeleteStrategy == DeleteStrategyImmediate {
+			if err := s.deleteSqsMessages(msgBatch); err != nil {
+				return err
+			}
+		}
+
 		err := consumeFn(dataBatch)
 		if err != nil {
 			logrus.Error("error processing batch: ", err)
 			return nil
 		}
 
-		err = s.deleteSqsMessages(msgBatch)
-		if err != nil {
-			return err
+		if s.config.DeleteStrategy == DeleteStrategyOnSuccess {
+			if err := s.deleteSqsMessages(msgBatch); err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -224,7 +249,6 @@ func (s *SQS) getVisibilityTimeout() *int64 {
 }
 
 func (s *SQS) deleteSqsMessages(msg []*sqs.Message) error {
-
 	if len(msg) == 0 {
 		return nil
 	}

@@ -98,6 +98,7 @@ func TestNewSQSWorker(t *testing.T) {
 					Concurrency:         DefaultConcurrency,
 					MaxNumberOfMessages: DefaultMaxNumberOfMessages,
 					WaitTimeSeconds:     DefaultWaitTimeSeconds,
+					DeleteStrategy:      DefaultDeleteStrategy,
 				},
 				sqs: svc,
 			},
