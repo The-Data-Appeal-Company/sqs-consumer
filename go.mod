@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go v1.43.26
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.1
-	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
+	golang.org/x/sync v0.1.0
 )
 
 require (
