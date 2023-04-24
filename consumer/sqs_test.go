@@ -245,7 +245,7 @@ func TestSQS_getVisibilityTimeout(t *testing.T) {
 }
 
 func TestSQS_handleMessagesWhenSqsError(t *testing.T) {
-	ctx := context.Background()
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
 	type fields struct {
 		config *SQSConf
 		sqs    sqsiface.SQSAPI
@@ -279,8 +279,7 @@ func TestSQS_handleMessagesWhenSqsError(t *testing.T) {
 			name: "should error when delete error",
 			fields: fields{
 				config: &SQSConf{
-					Queue:             "queue",
-					VisibilityTimeout: 0,
+					Queue: "queue",
 				},
 				sqs: NewSqsMock(nil, fmt.Errorf("error")),
 			},
@@ -294,10 +293,12 @@ func TestSQS_handleMessagesWhenSqsError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &SQS{
-				config: tt.fields.config,
-				sqs:    tt.fields.sqs,
-			}
+			s, err := NewSQSConsumer(
+				tt.fields.config,
+				tt.fields.sqs,
+			)
+			require.NoError(t, err)
+
 			require.Error(t, s.handleMessages(tt.args.ctx, tt.args.consumeFn))
 		})
 	}
