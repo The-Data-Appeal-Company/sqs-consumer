@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/The-Data-Appeal-Company/batcher-go v0.0.0-20200628191851-c032d7566777
 	github.com/aws/aws-sdk-go v1.44.275
-	github.com/sirupsen/logrus v1.9.2
+	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/sync v0.2.0
 )
