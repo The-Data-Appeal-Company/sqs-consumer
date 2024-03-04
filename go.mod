@@ -6,7 +6,7 @@ require (
 	github.com/The-Data-Appeal-Company/batcher-go v0.0.0-20200628191851-c032d7566777
 	github.com/aws/aws-sdk-go v1.48.0
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	golang.org/x/sync v0.2.0
 )
 
